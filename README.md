@@ -2,7 +2,15 @@
 
 `codex-lsp-mcp` is a local MCP stdio server that exposes read-only LSP navigation tools to Codex.
 
-First supported backend: `clangd`.
+Current backend support is limited to `clangd`.
+
+## Quick start
+
+Run the published package from PyPI:
+
+```bash
+uvx codex-lsp-mcp
+```
 
 ## Local development
 
@@ -14,7 +22,7 @@ uvx --from . codex-lsp-mcp
 ## Codex configuration
 
 ```bash
-codex mcp add codex-lsp-mcp -- uvx --from git+https://github.com/SunJun8/codex-lsp-mcp.git@v0.1.0 codex-lsp-mcp
+codex mcp add codex-lsp-mcp -- uvx codex-lsp-mcp
 ```
 
 Check registration:
