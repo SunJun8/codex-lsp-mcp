@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -57,22 +58,18 @@ class ToolHandlers:
         self,
         query: str,
         root_hint: str | None = None,
+        server_name: str | None = None,
     ) -> JsonObject:
         """Return workspace symbols, optionally scoped by a root hint."""
-        if root_hint is not None:
-            hint = Path(root_hint).expanduser().resolve()
-            session_path = hint if hint.is_file() else hint / ".codex_lsp_workspace_hint.c"
-            session = self.manager.get_session(session_path)
-        else:
-            try:
-                session = next(iter(self.manager.sessions.values()))
-            except StopIteration:
-                session_path = self.manager.fallback_root / ".codex_lsp_workspace_hint.c"
-                session = self.manager.get_session(session_path)
+        session = self.manager.get_workspace_session(root_hint, server_name=server_name)
         return await session.workspace_symbols(query)
 
     def _resolve_file(self, file: str) -> tuple[Path, str, Any]:
-        path = Path(file).expanduser().resolve()
+        raw_path = Path(file).expanduser()
+        if raw_path.is_absolute():
+            path = raw_path.resolve()
+        else:
+            path = (self.manager.fallback_root / raw_path).resolve()
         if not path.exists():
             raise FileNotFoundError(path)
 
@@ -81,9 +78,18 @@ class ToolHandlers:
         return path, language_id, session
 
 
+def _default_fallback_root() -> Path:
+    logical_cwd = os.environ.get("PWD")
+    if logical_cwd:
+        path = Path(logical_cwd).expanduser()
+        if path.is_absolute() and path.exists():
+            return path.resolve()
+    return Path.cwd()
+
+
 def build_mcp() -> FastMCP:
     config = load_config()
-    manager = SessionManager(config, fallback_root=Path.cwd())
+    manager = SessionManager(config, fallback_root=_default_fallback_root())
     handlers = ToolHandlers(manager)
     mcp = FastMCP("codex-lsp-mcp")
 

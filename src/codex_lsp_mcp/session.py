@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import unquote, urlparse
 
 from .config import ServerConfig
@@ -22,11 +22,43 @@ class OpenFile:
     size: int
 
 
-BACKGROUND_INDEX_PROGRESS_TOKEN = "backgroundIndexProgress"
 WORKSPACE_SYMBOL_INDEX_IDLE_TIMEOUT = 2.0
 
 
-class ClangdSession:
+class LspNavigationSession(Protocol):
+    async def definition(
+        self,
+        path: str | Path,
+        language_id: str,
+        line: int,
+        character: int,
+    ) -> JsonObject: ...
+
+    async def references(
+        self,
+        path: str | Path,
+        language_id: str,
+        line: int,
+        character: int,
+        include_declaration: bool = False,
+    ) -> JsonObject: ...
+
+    async def hover(
+        self,
+        path: str | Path,
+        language_id: str,
+        line: int,
+        character: int,
+    ) -> JsonObject: ...
+
+    async def diagnostics(self, path: str | Path, language_id: str) -> JsonObject: ...
+
+    async def document_symbols(self, path: str | Path, language_id: str) -> JsonObject: ...
+
+    async def workspace_symbols(self, query: str) -> JsonObject: ...
+
+
+class GenericLspSession:
     def __init__(self, root: Path, server_config: ServerConfig) -> None:
         self.root = Path(root).expanduser().resolve()
         self.server_config = server_config
@@ -61,12 +93,11 @@ class ClangdSession:
                     )
                 except FileNotFoundError as exc:
                     raise RuntimeError(
-                        f"clangd not found: install clangd or set CLANGD_BIN "
-                        f"to the clangd executable path (current command: "
-                        f"{self.server_config.command})"
+                        f"LSP server not found: install the configured server "
+                        f"or set its executable path (current command: {self.server_config.command})"
                     ) from exc
                 if self.process.stdout is None or self.process.stdin is None:
-                    raise RuntimeError("failed to open clangd stdio pipes")
+                    raise RuntimeError("failed to open LSP stdio pipes")
 
                 self._background_index_idle.clear()
                 self.client = LspClient(self.process.stdout, self.process.stdin)
@@ -80,7 +111,8 @@ class ClangdSession:
                     {
                         "processId": None,
                         "rootUri": self.root.as_uri(),
-                        "capabilities": {"window": {"workDoneProgress": True}},
+                        "capabilities": self.server_config.capabilities,
+                        "initializationOptions": self.server_config.initialization_options,
                     },
                 )
                 await self.client.notify("initialized", {})
@@ -317,7 +349,9 @@ class ClangdSession:
     def _handle_progress_notification(self, params: Any) -> None:
         if not isinstance(params, dict):
             return
-        if params.get("token") != BACKGROUND_INDEX_PROGRESS_TOKEN:
+        if self.server_config.index_progress_token is None:
+            return
+        if params.get("token") != self.server_config.index_progress_token:
             return
         value = params.get("value")
         if not isinstance(value, dict):
@@ -331,7 +365,7 @@ class ClangdSession:
 
     def _require_client(self) -> LspClient:
         if self.client is None:
-            raise RuntimeError("clangd session has not been started")
+            raise RuntimeError("LSP session has not been started")
         return self.client
 
     def _text_document_position_params(
@@ -437,3 +471,6 @@ class ClangdSession:
             parts = [self._hover_contents_to_text(item) for item in contents]
             return "\n".join(part for part in parts if part)
         return ""
+
+
+ClangdSession = GenericLspSession

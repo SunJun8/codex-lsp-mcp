@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from codex_lsp_mcp import server as server_module
 from codex_lsp_mcp.server import ToolHandlers
 
 
@@ -58,11 +59,30 @@ class FakeManager:
         self.sessions[("clangd", resolved.parent)] = self.session
         return self.session
 
+    def get_workspace_session(self, root_hint=None, server_name=None):
+        self.workspace_server_name = server_name
+        if root_hint is None:
+            if self.sessions:
+                return next(iter(self.sessions.values()))
+            return self.get_session(self.fallback_root / ".codex_lsp_workspace_hint.c")
+        return self.get_session(root_hint)
+
     def language_for(self, path):
         suffix = Path(path).suffix
         if suffix not in {".c", ".h"}:
             raise ValueError(f"unsupported file extension: {suffix}")
         return ("clangd", "c")
+
+
+def test_default_fallback_root_uses_logical_pwd(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    server_cwd = tmp_path / "server"
+    workspace.mkdir()
+    server_cwd.mkdir()
+    monkeypatch.chdir(server_cwd)
+    monkeypatch.setenv("PWD", str(workspace))
+
+    assert server_module._default_fallback_root() == workspace.resolve()
 
 
 @pytest.mark.asyncio
@@ -124,6 +144,26 @@ async def test_file_tools_use_finalized_session_argument_order(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_file_tools_resolve_relative_paths_from_fallback_root(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    server_cwd = tmp_path / "server"
+    source = workspace / "nuttx" / "mm" / "iob" / "iob_initialize.c"
+    source.parent.mkdir(parents=True)
+    source.write_text("void iob_initialize(void) {}\n", encoding="utf-8")
+    server_cwd.mkdir()
+    monkeypatch.chdir(server_cwd)
+    manager = FakeManager()
+    manager.fallback_root = workspace.resolve()
+    handlers = ToolHandlers(manager)
+
+    await handlers.document_symbols("nuttx/mm/iob/iob_initialize.c")
+
+    assert manager.session.calls == [
+        ("document_symbols", source.resolve(), "c"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_workspace_symbols_uses_existing_session_without_root_hint():
     manager = FakeManager()
     session = FakeSession()
@@ -161,11 +201,25 @@ async def test_workspace_symbols_uses_file_root_hint(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_workspace_symbols_uses_synthetic_c_file_for_directory_hint(tmp_path):
+async def test_workspace_symbols_delegates_directory_hint_to_manager(tmp_path):
     manager = FakeManager()
     handlers = ToolHandlers(manager)
 
     await handlers.workspace_symbols("main", root_hint=str(tmp_path))
 
-    assert manager.paths == [(tmp_path / ".codex_lsp_workspace_hint.c").resolve()]
+    assert manager.paths == [tmp_path.resolve()]
     assert manager.session.calls == [("workspace_symbols", "main")]
+
+
+@pytest.mark.asyncio
+async def test_workspace_symbols_passes_server_name_to_manager(tmp_path):
+    class ServerNameManager(FakeManager):
+        def get_workspace_session(self, root_hint=None, server_name=None):
+            return super().get_workspace_session(root_hint, server_name)
+
+    manager = ServerNameManager()
+    handlers = ToolHandlers(manager)
+
+    await handlers.workspace_symbols("main", root_hint=str(tmp_path), server_name="pyright")
+
+    assert manager.workspace_server_name == "pyright"

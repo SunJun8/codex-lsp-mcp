@@ -33,3 +33,14 @@ def test_discover_root_falls_back_to_startup_dir(tmp_path):
     file_path.write_text("void driver(void) {}\n", encoding="utf-8")
 
     assert discover_root(file_path, fallback=tmp_path) == tmp_path
+
+
+def test_discover_root_accepts_server_specific_markers(tmp_path):
+    root = tmp_path / "repo"
+    src = root / "src"
+    src.mkdir(parents=True)
+    (root / "Cargo.toml").write_text("[package]\nname = 'demo'\n", encoding="utf-8")
+    file_path = src / "main.rs"
+    file_path.write_text("fn main() {}\n", encoding="utf-8")
+
+    assert discover_root(file_path, fallback=tmp_path, marker_groups=(("Cargo.toml",),)) == root

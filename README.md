@@ -41,3 +41,6 @@ CLANGD_BIN = "/path/to/clangd"
 The server discovers the closest `compile_commands.json` from the queried file path.
 
 Tool coordinates follow the LSP convention: zero-based `line` and `character`.
+
+When multiple configured LSP backends match the same workspace directory, pass
+`server_name` to `workspace_symbols` to select the intended backend explicitly.

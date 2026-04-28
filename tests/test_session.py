@@ -2,7 +2,7 @@ import asyncio
 import pytest
 
 from codex_lsp_mcp.config import ServerConfig
-from codex_lsp_mcp.session import ClangdSession
+from codex_lsp_mcp.session import GenericLspSession
 
 
 RANGE = {
@@ -114,6 +114,7 @@ def server_config():
         command="clangd",
         args=["--background-index"],
         extension_to_language={".c": "c"},
+        index_progress_token="backgroundIndexProgress",
     )
 
 
@@ -127,7 +128,7 @@ async def test_definition_uses_planned_signature_returns_items_and_sends_did_ope
     FakeClient.request_results["textDocument/definition"] = [
         {"uri": source.as_uri(), "range": RANGE}
     ]
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     result = await session.definition(source, "c", 0, 4)
 
@@ -175,9 +176,30 @@ async def test_start_wraps_missing_clangd_with_actionable_error(
         raise FileNotFoundError("clangd")
 
     monkeypatch.setattr("codex_lsp_mcp.session.asyncio.create_subprocess_exec", create_process)
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
-    with pytest.raises(RuntimeError, match="install clangd or set CLANGD_BIN"):
+    with pytest.raises(RuntimeError, match="LSP server not found"):
+        await session.start()
+
+
+@pytest.mark.asyncio
+async def test_start_reports_generic_stdio_pipe_error(
+    monkeypatch,
+    tmp_path,
+    server_config,
+):
+    class MissingPipeProcess(FakeProcess):
+        def __init__(self):
+            super().__init__()
+            self.stdin = None
+
+    async def create_process(*args, **kwargs):
+        return MissingPipeProcess()
+
+    monkeypatch.setattr("codex_lsp_mcp.session.asyncio.create_subprocess_exec", create_process)
+    session = GenericLspSession(tmp_path, server_config)
+
+    with pytest.raises(RuntimeError, match="LSP stdio pipes"):
         await session.start()
 
 
@@ -190,7 +212,7 @@ async def test_workspace_symbols_auto_starts_and_returns_items(tmp_path, server_
             "location": {"uri": (tmp_path / "main.c").as_uri(), "range": RANGE},
         }
     ]
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     result = await session.workspace_symbols("main")
 
@@ -217,7 +239,7 @@ async def test_workspace_symbols_retries_after_background_index_wait_times_out(
         ]
     )
     monkeypatch.setattr("codex_lsp_mcp.session.WORKSPACE_SYMBOL_INDEX_IDLE_TIMEOUT", 0)
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     result = await session.workspace_symbols("main")
 
@@ -259,7 +281,7 @@ async def test_workspace_symbols_waits_for_background_index_end_after_empty_cold
             ],
         ]
     )
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     result = await session.workspace_symbols("main")
 
@@ -283,7 +305,7 @@ async def test_workspace_symbols_does_not_open_compile_database_candidates(
     (tmp_path / "compile_commands.json").write_text("[]\n", encoding="utf-8")
     FakeClient.request_results["workspace/symbol"] = []
     monkeypatch.setattr("codex_lsp_mcp.session.WORKSPACE_SYMBOL_INDEX_IDLE_TIMEOUT", 0)
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     result = await session.workspace_symbols("main")
 
@@ -296,7 +318,7 @@ async def test_workspace_symbols_does_not_open_compile_database_candidates(
 @pytest.mark.asyncio
 async def test_concurrent_start_initializes_once(tmp_path, server_config, reset_fakes):
     FakeClient.initialize_delay = 0.01
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     await asyncio.gather(session.start(), session.start())
 
@@ -307,7 +329,7 @@ async def test_concurrent_start_initializes_once(tmp_path, server_config, reset_
 
 @pytest.mark.asyncio
 async def test_failed_start_cleans_up_and_can_retry(tmp_path, server_config, reset_fakes):
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
     FakeClient.fail_initialize = True
 
     with pytest.raises(RuntimeError, match="initialize failed"):
@@ -330,7 +352,7 @@ async def test_failed_start_cleans_up_and_can_retry(tmp_path, server_config, res
 async def test_stop_clears_open_files_so_later_ensure_sends_did_open(tmp_path, server_config):
     source = tmp_path / "main.c"
     source.write_text("int first;\n", encoding="utf-8")
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     await session.ensure_file_open(source, "c")
     await session.stop()
@@ -368,7 +390,7 @@ async def test_diagnostics_waits_for_notification_and_returns_items(tmp_path, se
             },
         }
     ]
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     result = await session.diagnostics(source, "c")
 
@@ -398,7 +420,7 @@ async def test_diagnostics_waits_for_fresh_publish_after_did_change(tmp_path, se
             },
         }
     ]
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     assert (await session.diagnostics(source, "c"))["items"][0]["message"] == "old"
 
@@ -423,7 +445,7 @@ async def test_concurrent_ensure_file_open_sends_one_did_open(tmp_path, server_c
     source = tmp_path / "main.c"
     source.write_text("int value;\n", encoding="utf-8")
     FakeClient.notify_delay = 0.01
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     await asyncio.gather(
         session.ensure_file_open(source, "c"),
@@ -440,7 +462,7 @@ async def test_concurrent_ensure_file_open_sends_one_did_open(tmp_path, server_c
 async def test_notification_error_marks_session_retryable(tmp_path, server_config):
     FakeClient.notifications = [{"_raise": RuntimeError("connection closed")}]
     FakeClient.request_results["workspace/symbol"] = []
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     await session.start()
     await asyncio.sleep(0)
@@ -473,7 +495,7 @@ async def test_document_symbols_includes_nested_children(tmp_path, server_config
             ],
         }
     ]
-    session = ClangdSession(tmp_path, server_config)
+    session = GenericLspSession(tmp_path, server_config)
 
     result = await session.document_symbols(source, "c")
 
