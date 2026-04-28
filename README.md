@@ -2,7 +2,8 @@
 
 `codex-lsp-mcp` is a local MCP stdio server that exposes read-only LSP navigation tools to Codex.
 
-Current backend support is limited to `clangd`.
+Built-in defaults target `clangd`; additional LSP backends can be configured in
+`~/.config/codex-lsp-mcp/config.toml`.
 
 ## Quick start
 
