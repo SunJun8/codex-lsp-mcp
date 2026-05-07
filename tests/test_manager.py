@@ -1,4 +1,4 @@
-from codex_lsp_mcp.config import AppConfig, ServerConfig
+from codex_lsp_mcp.config import AppConfig, ServerConfig, default_config
 from codex_lsp_mcp.manager import SessionManager
 
 
@@ -89,6 +89,28 @@ def test_manager_uses_server_specific_root_markers(tmp_path):
     session = manager.get_session(path)
 
     assert session.root == root
+
+
+def test_manager_default_config_routes_python_files_to_pyright(tmp_path):
+    root = tmp_path / "repo"
+    src = root / "src"
+    src.mkdir(parents=True)
+    (root / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    path = src / "app.py"
+    path.write_text("def main():\n    return 0\n", encoding="utf-8")
+    manager = SessionManager(
+        default_config(),
+        fallback_root=tmp_path,
+        session_factory=FakeSession,
+    )
+
+    server_name, language_id = manager.language_for(path)
+    session = manager.get_session(path)
+
+    assert (server_name, language_id) == ("pyright", "python")
+    assert session.root == root
+    assert session.server_config.command == "pyright-langserver"
+    assert session.server_config.args == ["--stdio"]
 
 
 def test_manager_builds_workspace_hint_from_default_server_config(tmp_path):
