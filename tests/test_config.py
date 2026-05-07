@@ -4,12 +4,14 @@ from codex_lsp_mcp import config as config_module
 from codex_lsp_mcp.config import AppConfig, ServerConfig, load_config
 
 
-def test_load_config_uses_builtin_clangd_defaults(monkeypatch):
+def test_load_config_uses_builtin_clangd_and_pyright_defaults(monkeypatch):
     monkeypatch.delenv("CODEX_LSP_MCP_CONFIG", raising=False)
     monkeypatch.delenv("CLANGD_BIN", raising=False)
     monkeypatch.delenv("CLANGD_ARGS", raising=False)
 
     config = load_config(env={})
+
+    assert set(config.servers) == {"clangd", "pyright"}
 
     clangd = config.servers["clangd"]
     assert clangd.command == "clangd"
@@ -18,6 +20,22 @@ def test_load_config_uses_builtin_clangd_defaults(monkeypatch):
     assert clangd.extension_to_language[".cpp"] == "cpp"
     assert clangd.workspace_hint_extension == ".c"
     assert clangd.index_progress_token == "backgroundIndexProgress"
+
+    pyright = config.servers["pyright"]
+    assert pyright.command == "pyright-langserver"
+    assert pyright.args == ["--stdio"]
+    assert pyright.extension_to_language == {".py": "python"}
+    assert pyright.workspace_hint_extension == ".py"
+    assert pyright.root_markers == (
+        ("pyproject.toml",),
+        ("setup.py",),
+        ("setup.cfg",),
+        ("requirements.txt",),
+        ("Pipfile",),
+        ("poetry.lock",),
+        (".git", ".repo"),
+    )
+    assert pyright.index_progress_token is None
 
 
 def test_load_config_reads_config_file(tmp_path):
