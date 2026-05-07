@@ -15,6 +15,15 @@ DEFAULT_ROOT_MARKER_GROUPS = (
     (".clangd",),
     (".git", ".repo"),
 )
+DEFAULT_PYRIGHT_ROOT_MARKER_GROUPS = (
+    ("pyproject.toml",),
+    ("setup.py",),
+    ("setup.cfg",),
+    ("requirements.txt",),
+    ("Pipfile",),
+    ("poetry.lock",),
+    (".git", ".repo"),
+)
 
 
 @dataclass(frozen=True)
@@ -54,7 +63,14 @@ def default_config() -> AppConfig:
                     ".H": "cpp",
                 },
                 index_progress_token="backgroundIndexProgress",
-            )
+            ),
+            "pyright": ServerConfig(
+                command="pyright-langserver",
+                args=["--stdio"],
+                extension_to_language={".py": "python"},
+                root_markers=DEFAULT_PYRIGHT_ROOT_MARKER_GROUPS,
+                workspace_hint_extension=".py",
+            ),
         }
     )
 
