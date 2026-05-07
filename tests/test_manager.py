@@ -113,6 +113,27 @@ def test_manager_default_config_routes_python_files_to_pyright(tmp_path):
     assert session.server_config.args == ["--stdio"]
 
 
+def test_manager_default_pyright_prefers_pyrightconfig_root_over_repo_root(tmp_path):
+    repo = tmp_path / "repo"
+    package = repo / "packages" / "python"
+    src = package / "src"
+    src.mkdir(parents=True)
+    (repo / ".git").mkdir()
+    (package / "pyrightconfig.json").write_text("{}\n", encoding="utf-8")
+    path = src / "app.py"
+    path.write_text("def main():\n    return 0\n", encoding="utf-8")
+    manager = SessionManager(
+        default_config(),
+        fallback_root=tmp_path,
+        session_factory=FakeSession,
+    )
+
+    session = manager.get_session(path)
+
+    assert session.root == package
+    assert session.server_config.command == "pyright-langserver"
+
+
 def test_manager_builds_workspace_hint_from_default_server_config(tmp_path):
     config = AppConfig(
         servers={

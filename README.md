@@ -47,7 +47,7 @@ backend in `~/.config/codex-lsp-mcp/config.toml`:
 [servers.pyright]
 command = "/home/miot/.local/share/nvim/mason/bin/pyright-langserver"
 args = ["--stdio"]
-root_markers = [["pyproject.toml"], ["setup.py"], ["setup.cfg"], ["requirements.txt"], ["Pipfile"], ["poetry.lock"], [".git", ".repo"]]
+root_markers = [["pyrightconfig.json"], ["pyproject.toml"], ["setup.py"], ["setup.cfg"], ["requirements.txt"], ["Pipfile"], ["poetry.lock"], [".git", ".repo"]]
 workspace_hint_extension = ".py"
 
 [servers.pyright.extension_to_language]

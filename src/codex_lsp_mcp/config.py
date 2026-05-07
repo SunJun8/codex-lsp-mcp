@@ -16,6 +16,7 @@ DEFAULT_ROOT_MARKER_GROUPS = (
     (".git", ".repo"),
 )
 DEFAULT_PYRIGHT_ROOT_MARKER_GROUPS = (
+    ("pyrightconfig.json",),
     ("pyproject.toml",),
     ("setup.py",),
     ("setup.cfg",),

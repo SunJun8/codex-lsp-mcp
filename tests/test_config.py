@@ -27,6 +27,7 @@ def test_load_config_uses_builtin_clangd_and_pyright_defaults(monkeypatch):
     assert pyright.extension_to_language == {".py": "python"}
     assert pyright.workspace_hint_extension == ".py"
     assert pyright.root_markers == (
+        ("pyrightconfig.json",),
         ("pyproject.toml",),
         ("setup.py",),
         ("setup.cfg",),
