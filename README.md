@@ -45,7 +45,7 @@ backend in `~/.config/codex-lsp-mcp/config.toml`:
 
 ```toml
 [servers.pyright]
-command = "/home/miot/.local/share/nvim/mason/bin/pyright-langserver"
+command = "/path/to/pyright-langserver"
 args = ["--stdio"]
 root_markers = [["pyrightconfig.json"], ["pyproject.toml"], ["setup.py"], ["setup.cfg"], ["requirements.txt"], ["Pipfile"], ["poetry.lock"], [".git", ".repo"]]
 workspace_hint_extension = ".py"
@@ -66,10 +66,10 @@ is relative or when the MCP server process is not running from the project root:
 
 ```json
 {
-  "file": "miio_test/cli.py",
+  "file": "src/example.py",
   "line": 86,
   "character": 18,
-  "root_hint": "/home/miot/Work/miot/tool/miio_test"
+  "root_hint": "/path/to/project"
 }
 ```
 
