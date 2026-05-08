@@ -52,10 +52,15 @@ class FakeManager:
         self.sessions = {}
         self.session = FakeSession()
         self.paths = []
+        self.root_hints = []
 
-    def get_session(self, path):
+    def get_session(self, path, root_hint=None):
         resolved = Path(path).expanduser().resolve()
+        resolved_root_hint = (
+            None if root_hint is None else Path(root_hint).expanduser().resolve()
+        )
         self.paths.append(resolved)
+        self.root_hints.append(resolved_root_hint)
         self.sessions[("clangd", resolved.parent)] = self.session
         return self.session
 
@@ -161,6 +166,60 @@ async def test_file_tools_resolve_relative_paths_from_fallback_root(tmp_path, mo
     assert manager.session.calls == [
         ("document_symbols", source.resolve(), "c"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_file_tools_resolve_relative_paths_from_root_hint(tmp_path):
+    workspace = tmp_path / "workspace"
+    source = workspace / "src" / "main.c"
+    source.parent.mkdir(parents=True)
+    source.write_text("void main_symbol(void) {}\n", encoding="utf-8")
+    manager = FakeManager()
+    handlers = ToolHandlers(manager)
+
+    await handlers.document_symbols("src/main.c", root_hint=str(workspace))
+
+    assert manager.session.calls == [
+        ("document_symbols", source.resolve(), "c"),
+    ]
+    assert manager.root_hints == [workspace.resolve()]
+
+
+@pytest.mark.asyncio
+async def test_file_tools_keep_absolute_file_path_when_root_hint_is_passed(tmp_path):
+    workspace = tmp_path / "workspace"
+    other = tmp_path / "other"
+    source = workspace / "src" / "main.c"
+    source.parent.mkdir(parents=True)
+    other.mkdir()
+    source.write_text("void main_symbol(void) {}\n", encoding="utf-8")
+    manager = FakeManager()
+    handlers = ToolHandlers(manager)
+
+    await handlers.diagnostics(str(source), root_hint=str(other))
+
+    assert manager.session.calls == [
+        ("diagnostics", source.resolve(), "c"),
+    ]
+    assert manager.root_hints == [other.resolve()]
+
+
+@pytest.mark.asyncio
+async def test_file_tools_reject_missing_root_hint_for_relative_path(tmp_path):
+    workspace = tmp_path / "workspace"
+    source = workspace / "src" / "main.c"
+    source.parent.mkdir(parents=True)
+    source.write_text("void main_symbol(void) {}\n", encoding="utf-8")
+    manager = FakeManager()
+    handlers = ToolHandlers(manager)
+
+    with pytest.raises(FileNotFoundError):
+        await handlers.document_symbols(
+            "src/main.c",
+            root_hint=str(tmp_path / "missing"),
+        )
+
+    assert manager.session.calls == []
 
 
 @pytest.mark.asyncio
