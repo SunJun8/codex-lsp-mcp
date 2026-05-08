@@ -115,6 +115,33 @@ def test_manager_get_session_falls_back_to_root_hint_without_markers(tmp_path):
     assert session.root == workspace.resolve()
 
 
+def test_manager_get_session_rejects_missing_root_hint(tmp_path):
+    workspace = tmp_path / "workspace"
+    source_dir = workspace / "src"
+    fallback = tmp_path / "server"
+    source_dir.mkdir(parents=True)
+    fallback.mkdir()
+    path = source_dir / "main.c"
+    path.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+    config = AppConfig(
+        servers={
+            "clangd": ServerConfig(
+                command="clangd",
+                args=["--background-index"],
+                extension_to_language={".c": "c"},
+            )
+        }
+    )
+    manager = SessionManager(config, fallback_root=fallback, session_factory=FakeSession)
+
+    try:
+        manager.get_session(path, root_hint=tmp_path / "missing")
+    except FileNotFoundError as exc:
+        assert exc.args == ((tmp_path / "missing").resolve(),)
+    else:
+        raise AssertionError("missing root hint did not fail")
+
+
 def test_manager_get_session_prefers_marker_root_over_root_hint(tmp_path):
     workspace = tmp_path / "workspace"
     package = workspace / "packages" / "native"

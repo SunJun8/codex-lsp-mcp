@@ -79,6 +79,8 @@ class SessionManager:
         if root_hint is None:
             return self.fallback_root
         path = Path(root_hint).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(path)
         if path.is_file():
             return path.parent
         return path
