@@ -2,3 +2,4 @@
 __pycache__/
 *.py[cod]
 uv.lock
+docs/superpowers/
