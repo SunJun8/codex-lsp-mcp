@@ -91,6 +91,88 @@ def test_manager_uses_server_specific_root_markers(tmp_path):
     assert session.root == root
 
 
+def test_manager_get_session_falls_back_to_root_hint_without_markers(tmp_path):
+    workspace = tmp_path / "workspace"
+    source_dir = workspace / "src"
+    fallback = tmp_path / "server"
+    source_dir.mkdir(parents=True)
+    fallback.mkdir()
+    path = source_dir / "main.c"
+    path.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+    config = AppConfig(
+        servers={
+            "clangd": ServerConfig(
+                command="clangd",
+                args=["--background-index"],
+                extension_to_language={".c": "c"},
+            )
+        }
+    )
+    manager = SessionManager(config, fallback_root=fallback, session_factory=FakeSession)
+
+    session = manager.get_session(path, root_hint=workspace)
+
+    assert session.root == workspace.resolve()
+
+
+def test_manager_get_session_prefers_marker_root_over_root_hint(tmp_path):
+    workspace = tmp_path / "workspace"
+    package = workspace / "packages" / "native"
+    source_dir = package / "src"
+    fallback = tmp_path / "server"
+    source_dir.mkdir(parents=True)
+    fallback.mkdir()
+    (package / "compile_commands.json").write_text("[]", encoding="utf-8")
+    path = source_dir / "main.c"
+    path.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+    config = AppConfig(
+        servers={
+            "clangd": ServerConfig(
+                command="clangd",
+                args=["--background-index"],
+                extension_to_language={".c": "c"},
+            )
+        }
+    )
+    manager = SessionManager(config, fallback_root=fallback, session_factory=FakeSession)
+
+    session = manager.get_session(path, root_hint=workspace)
+
+    assert session.root == package.resolve()
+
+
+def test_manager_root_hint_preserves_backend_specific_markers(tmp_path):
+    workspace = tmp_path / "workspace"
+    native = workspace / "native"
+    python = workspace / "python"
+    native_src = native / "src"
+    python_src = python / "src"
+    native_src.mkdir(parents=True)
+    python_src.mkdir(parents=True)
+    (native / "compile_commands.json").write_text("[]", encoding="utf-8")
+    (python / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\n",
+        encoding="utf-8",
+    )
+    c_file = native_src / "main.c"
+    py_file = python_src / "app.py"
+    c_file.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+    py_file.write_text("def main():\n    return 0\n", encoding="utf-8")
+    manager = SessionManager(
+        default_config(),
+        fallback_root=tmp_path / "server",
+        session_factory=FakeSession,
+    )
+
+    c_session = manager.get_session(c_file, root_hint=workspace)
+    py_session = manager.get_session(py_file, root_hint=workspace)
+
+    assert c_session.root == native.resolve()
+    assert c_session.server_config.command == "clangd"
+    assert py_session.root == python.resolve()
+    assert py_session.server_config.command == "pyright-langserver"
+
+
 def test_manager_default_config_routes_python_files_to_pyright(tmp_path):
     root = tmp_path / "repo"
     src = root / "src"
