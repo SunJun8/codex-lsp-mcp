@@ -23,10 +23,15 @@ class SessionManager:
         self.session_factory = session_factory
         self.sessions: dict[tuple[str, Path], LspNavigationSession] = {}
 
-    def get_session(self, file_path: str | Path) -> LspNavigationSession:
+    def get_session(
+        self,
+        file_path: str | Path,
+        root_hint: str | Path | None = None,
+    ) -> LspNavigationSession:
         path = Path(file_path).expanduser().resolve()
         server_name, _language_id = self.language_for(path)
-        return self._get_session_for_server(server_name, path)
+        fallback_root = self._session_fallback_root(root_hint)
+        return self._get_session_for_server(server_name, path, fallback_root)
 
     def get_workspace_session(
         self,
@@ -57,13 +62,26 @@ class SessionManager:
         self,
         server_name: str,
         file_path: Path,
+        fallback_root: Path | None = None,
     ) -> LspNavigationSession:
         server_config = self._server_config(server_name)
-        root = discover_root(file_path, self.fallback_root, server_config.root_markers)
+        root = discover_root(
+            file_path,
+            fallback_root or self.fallback_root,
+            server_config.root_markers,
+        )
         key = (server_name, root)
         if key not in self.sessions:
             self.sessions[key] = self.session_factory(root, server_config)
         return self.sessions[key]
+
+    def _session_fallback_root(self, root_hint: str | Path | None) -> Path:
+        if root_hint is None:
+            return self.fallback_root
+        path = Path(root_hint).expanduser().resolve()
+        if path.is_file():
+            return path.parent
+        return path
 
     def _workspace_hint_path(self, root_hint: str | Path | None, server_name: str) -> Path:
         config = self._server_config(server_name)
