@@ -80,6 +80,3 @@ found. Server-specific markers still take precedence, such as
 
 `workspace_symbols` already accepts `root_hint` and can also take `server_name`
 when a directory is ambiguous across multiple configured LSP backends.
-
-When multiple configured LSP backends match the same workspace directory, pass
-`server_name` to `workspace_symbols` to select the intended backend explicitly.
