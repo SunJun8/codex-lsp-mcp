@@ -58,5 +58,28 @@ The server discovers the closest `compile_commands.json` from the queried file p
 
 Tool coordinates follow the LSP convention: zero-based `line` and `character`.
 
+## Workspace roots
+
+File-oriented tools (`definition`, `references`, `hover`, `diagnostics`, and
+`document_symbols`) accept an optional `root_hint` argument. Use it when `file`
+is relative or when the MCP server process is not running from the project root:
+
+```json
+{
+  "file": "miio_test/cli.py",
+  "line": 86,
+  "character": 18,
+  "root_hint": "/home/miot/Work/miot/tool/miio_test"
+}
+```
+
+Absolute `file` paths are not rewritten by `root_hint`, but the hint is still
+used as the fallback workspace root when no server-specific root marker is
+found. Server-specific markers still take precedence, such as
+`compile_commands.json` for clangd and `pyproject.toml` for pyright.
+
+`workspace_symbols` already accepts `root_hint` and can also take `server_name`
+when a directory is ambiguous across multiple configured LSP backends.
+
 When multiple configured LSP backends match the same workspace directory, pass
 `server_name` to `workspace_symbols` to select the intended backend explicitly.
