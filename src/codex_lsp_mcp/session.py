@@ -111,6 +111,9 @@ class GenericLspSession:
                     {
                         "processId": None,
                         "rootUri": self.root.as_uri(),
+                        "workspaceFolders": [
+                            {"uri": self.root.as_uri(), "name": self.root.name}
+                        ],
                         "capabilities": self.server_config.capabilities,
                         "initializationOptions": self.server_config.initialization_options,
                     },

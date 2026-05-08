@@ -119,6 +119,20 @@ def server_config():
 
 
 @pytest.mark.asyncio
+async def test_start_sends_workspace_folders_in_initialize(tmp_path, server_config):
+    session = GenericLspSession(tmp_path, server_config)
+
+    await session.start()
+
+    method, params = FakeClient.instances[0].requests[0]
+    assert method == "initialize"
+    assert params["rootUri"] == tmp_path.as_uri()
+    assert params["workspaceFolders"] == [
+        {"uri": tmp_path.as_uri(), "name": tmp_path.name}
+    ]
+
+
+@pytest.mark.asyncio
 async def test_definition_uses_planned_signature_returns_items_and_sends_did_open(
     tmp_path,
     server_config,
